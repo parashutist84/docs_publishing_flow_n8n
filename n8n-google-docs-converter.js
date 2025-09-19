@@ -13,11 +13,12 @@
  * 4. Where $json.body is the document structure from Google Docs API
  */
 
-function convertGoogleDocsToHtml(docStructure, documentLists = null) {
+function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjects = null) {
     let html = '';
     let currentListId = null;
     let openListTags = [];
     let currentNestingLevel = -1;
+    let images = []; // Collect images during processing
 
     // RGB color processing
     function rgbToHex(rgb) {
@@ -154,8 +155,31 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null) {
                     result += safeToString(linkResult);
                 }
             } else if (element.inlineObjectElement) {
-                // Process inline objects (images, etc.)
-                result += `<span class="inline-object" data-object-id="${element.inlineObjectElement.inlineObjectId}"><!-- Inline object --></span>`;
+                // Process inline objects (images, etc.) - create placeholder
+                const inlineObjectId = element.inlineObjectElement.inlineObjectId;
+                
+                // Get image data from inlineObjects if available
+                let altText = '';
+                let contentUri = '';
+                if (inlineObjects && inlineObjects[inlineObjectId]) {
+                    const embeddedObject = inlineObjects[inlineObjectId].inlineObjectProperties?.embeddedObject;
+                    if (embeddedObject) {
+                        altText = embeddedObject.description || embeddedObject.title || '';
+                        contentUri = embeddedObject.imageProperties?.contentUri || '';
+                        
+                        // Add to images array if it's actually an image
+                        if (contentUri) {
+                            images.push({
+                                id: inlineObjectId,
+                                contentUri: contentUri,
+                                alt: altText
+                            });
+                        }
+                    }
+                }
+                
+                // Create image placeholder
+                result += `[[IMG:${inlineObjectId}|${altText}]]`;
             }
         }
         
@@ -529,7 +553,10 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null) {
         html += `</${openListTags.pop()}>`;
     }
 
-    return html;
+    return {
+        html: html,
+        images: images
+    };
 }
 
 // Function for basic HTML cleanup for WordPress
@@ -685,20 +712,24 @@ try {
     // IMPORTANT: Document structure is in body.content, not in body!
     let documentStructure;
     let documentLists = null;
+    let inlineObjects = null;
     
     // Check different data structure variants
     if ($json.body && $json.body.content) {
         // Standard Google Docs API response
         documentStructure = $json.body.content;
         documentLists = $json.lists || $json.body.lists;
+        inlineObjects = $json.inlineObjects || $json.body.inlineObjects;
     } else if ($json.content) {
         // If content is at top level
         documentStructure = $json.content;
         documentLists = $json.lists;
+        inlineObjects = $json.inlineObjects;
     } else if (Array.isArray($json.body)) {
         // If body is already an array
         documentStructure = $json.body;
         documentLists = $json.lists;
+        inlineObjects = $json.inlineObjects;
     } else if ($json.body && typeof $json.body === 'object') {
         // Try to find content in body object
         const bodyKeys = Object.keys($json.body);
@@ -707,6 +738,7 @@ try {
             documentStructure = $json.body[contentKey];
         }
         documentLists = $json.lists || $json.body.lists;
+        inlineObjects = $json.inlineObjects || $json.body.inlineObjects;
     }
     
     if (!documentStructure) {
@@ -717,7 +749,9 @@ try {
         throw new Error('Document structure must be an array. Received: ' + typeof documentStructure);
     }
     
-    const html = convertGoogleDocsToHtml(documentStructure, documentLists);
+    const result = convertGoogleDocsToHtml(documentStructure, documentLists, inlineObjects);
+    const html = result.html;
+    const images = result.images;
     
     // ===== CLEANUP LEVEL CONFIGURATION =====
     // Change cleanLevel value to select cleanup level:
@@ -761,6 +795,7 @@ try {
         htmlUltra: ultraCleanHtmlForWordPress(html), // Ultra cleanup
         htmlSafe: wordPressSafeTagsOnly(html),       // Only safe tags
         htmlWordPress: wordPressCompatibleClean(html), // WordPress-compatible
+        images: images,           // Array of images with URLs and metadata
         success: true,
         cleanLevel: cleanType,
         elementsCount: documentStructure.length,
