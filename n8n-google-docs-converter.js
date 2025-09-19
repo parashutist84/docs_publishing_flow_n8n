@@ -13,10 +13,11 @@
  * 4. Where $json.body is the document structure from Google Docs API
  */
 
-function convertGoogleDocsToHtml(docStructure) {
+function convertGoogleDocsToHtml(docStructure, documentLists = null) {
     let html = '';
     let currentListId = null;
     let openListTags = [];
+    let currentNestingLevel = -1;
 
     // RGB color processing
     function rgbToHex(rgb) {
@@ -161,28 +162,104 @@ function convertGoogleDocsToHtml(docStructure) {
         return result;
     }
 
-    // List processing
+    // List processing with multi-level support
     function handleList(paragraph) {
         const bullet = paragraph.bullet;
         if (!bullet) return null;
 
         const listId = bullet.listId;
+        const nestingLevel = bullet.nestingLevel || 0;
         
-        // If this is a new list
-        if (currentListId !== listId) {
-            // Close previous list
-            while (openListTags.length > 0) {
-                html += `</${openListTags.pop()}>`;
+        // Handle different list or different nesting level
+        if (currentListId !== listId || currentNestingLevel !== nestingLevel) {
+            
+            // If it's a completely different list, close all open lists
+            if (currentListId !== listId) {
+                while (openListTags.length > 0) {
+                    html += `</${openListTags.pop()}>`;
+                }
+                currentNestingLevel = -1;
             }
             
-            // Determine list type (default ul)
-            const listTag = 'ul'; // Can extend logic to determine ol
-            html += `<${listTag}>`;
-            openListTags.push(listTag);
+            // Handle nesting level changes
+            if (nestingLevel > currentNestingLevel) {
+                // Going deeper - open new nested lists
+                while (currentNestingLevel < nestingLevel) {
+                    currentNestingLevel++;
+                    const listTag = getListType(listId, documentLists, currentNestingLevel);
+                    html += `<${listTag}>`;
+                    openListTags.push(listTag);
+                }
+            } else if (nestingLevel < currentNestingLevel) {
+                // Going up - close nested lists
+                while (currentNestingLevel > nestingLevel) {
+                    if (openListTags.length > 0) {
+                        html += `</${openListTags.pop()}>`;
+                    }
+                    currentNestingLevel--;
+                }
+            }
+            
             currentListId = listId;
+            currentNestingLevel = nestingLevel;
         }
 
         return true;
+    }
+
+    // Determine if list is numbered (ol) or bulleted (ul) based on nesting level
+    function getListType(listId, lists, level = 0) {
+        if (!lists || !lists[listId]) {
+            return 'ul'; // Default to bulleted list
+        }
+        
+        const listProperties = lists[listId].listProperties;
+        if (!listProperties || !listProperties.nestingLevels) {
+            return 'ul';
+        }
+        
+        // Get the appropriate nesting level, fallback to level 0 if specific level not found
+        const nestingLevelIndex = Math.min(level, listProperties.nestingLevels.length - 1);
+        const nestingLevel = listProperties.nestingLevels[nestingLevelIndex];
+        
+        if (!nestingLevel) {
+            return 'ul';
+        }
+        
+        // Check for glyph symbol first - if present, it's always bulleted
+        if (nestingLevel.glyphSymbol) {
+            return 'ul';
+        }
+        
+        // Check glyphType - this is the most reliable indicator for numbered lists
+        if (nestingLevel.glyphType) {
+            switch (nestingLevel.glyphType) {
+                case 'DECIMAL':
+                case 'ALPHA':
+                case 'UPPER_ALPHA':
+                case 'LOWER_ALPHA':
+                case 'ROMAN':
+                case 'UPPER_ROMAN':
+                case 'LOWER_ROMAN':
+                    return 'ol';
+                case 'GLYPH_TYPE_UNSPECIFIED':
+                    return 'ul'; // Always bulleted for unspecified type
+                default:
+                    break;
+            }
+        }
+        
+        // Check for glyph format that indicates numbered list
+        if (nestingLevel.glyphFormat) {
+            const format = nestingLevel.glyphFormat;
+            // Numbered formats contain % followed by number
+            if (format.includes('%0') || format.includes('%1') || format.includes('%2')) {
+                return 'ol';
+            }
+        }
+        
+        
+        return 'ul'; // Default to bulleted
     }
 
     // Determine heading type
@@ -281,8 +358,10 @@ function convertGoogleDocsToHtml(docStructure) {
                 // Process cell content
                 let tempListId = currentListId;
                 let tempOpenTags = [...openListTags];
+                let tempNestingLevel = currentNestingLevel;
                 currentListId = null;
                 openListTags = [];
+                currentNestingLevel = -1;
                 
                 for (const cellItem of cellContent) {
                     if (cellItem.paragraph) {
@@ -294,13 +373,39 @@ function convertGoogleDocsToHtml(docStructure) {
                         
                         // Check if this is a list item inside table
                         if (paragraph.bullet) {
-                            if (currentListId !== paragraph.bullet.listId) {
-                                while (openListTags.length > 0) {
-                                    cellHtml += `</${openListTags.pop()}>`;
+                            const bulletListId = paragraph.bullet.listId;
+                            const bulletNestingLevel = paragraph.bullet.nestingLevel || 0;
+                            
+                            if (currentListId !== bulletListId || currentNestingLevel !== bulletNestingLevel) {
+                                // If it's a completely different list, close all open lists
+                                if (currentListId !== bulletListId) {
+                                    while (openListTags.length > 0) {
+                                        cellHtml += `</${openListTags.pop()}>`;
+                                    }
+                                    currentNestingLevel = -1;
                                 }
-                                cellHtml += '<ul>';
-                                openListTags.push('ul');
-                                currentListId = paragraph.bullet.listId;
+                                
+                                // Handle nesting level changes
+                                if (bulletNestingLevel > currentNestingLevel) {
+                                    // Going deeper - open new nested lists
+                                    while (currentNestingLevel < bulletNestingLevel) {
+                                        currentNestingLevel++;
+                                        const listTag = getListType(bulletListId, documentLists, currentNestingLevel);
+                                        cellHtml += `<${listTag}>`;
+                                        openListTags.push(listTag);
+                                    }
+                                } else if (bulletNestingLevel < currentNestingLevel) {
+                                    // Going up - close nested lists
+                                    while (currentNestingLevel > bulletNestingLevel) {
+                                        if (openListTags.length > 0) {
+                                            cellHtml += `</${openListTags.pop()}>`;
+                                        }
+                                        currentNestingLevel--;
+                                    }
+                                }
+                                
+                                currentListId = bulletListId;
+                                currentNestingLevel = bulletNestingLevel;
                             }
                             cellHtml += `<li>${safeToString(content)}</li>`;
                         } else {
@@ -332,6 +437,7 @@ function convertGoogleDocsToHtml(docStructure) {
                 // Restore list state
                 currentListId = tempListId;
                 openListTags = tempOpenTags;
+                currentNestingLevel = tempNestingLevel;
                 
                 // Remove extra <br> at the end
                 cellHtml = cellHtml.replace(/<br>$/, '');
@@ -407,6 +513,7 @@ function convertGoogleDocsToHtml(docStructure) {
                 html += `</${openListTags.pop()}>`;
             }
             currentListId = null;
+            currentNestingLevel = -1;
             
             html += processTable(item);
         } else if (item.sectionBreak) {
@@ -577,17 +684,21 @@ function wordPressCompatibleClean(html) {
 try {
     // IMPORTANT: Document structure is in body.content, not in body!
     let documentStructure;
+    let documentLists = null;
     
     // Check different data structure variants
     if ($json.body && $json.body.content) {
         // Standard Google Docs API response
         documentStructure = $json.body.content;
+        documentLists = $json.lists || $json.body.lists;
     } else if ($json.content) {
         // If content is at top level
         documentStructure = $json.content;
+        documentLists = $json.lists;
     } else if (Array.isArray($json.body)) {
         // If body is already an array
         documentStructure = $json.body;
+        documentLists = $json.lists;
     } else if ($json.body && typeof $json.body === 'object') {
         // Try to find content in body object
         const bodyKeys = Object.keys($json.body);
@@ -595,6 +706,7 @@ try {
         if (contentKey) {
             documentStructure = $json.body[contentKey];
         }
+        documentLists = $json.lists || $json.body.lists;
     }
     
     if (!documentStructure) {
@@ -605,7 +717,7 @@ try {
         throw new Error('Document structure must be an array. Received: ' + typeof documentStructure);
     }
     
-    const html = convertGoogleDocsToHtml(documentStructure);
+    const html = convertGoogleDocsToHtml(documentStructure, documentLists);
     
     // ===== CLEANUP LEVEL CONFIGURATION =====
     // Change cleanLevel value to select cleanup level:
