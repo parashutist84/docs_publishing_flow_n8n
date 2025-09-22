@@ -172,7 +172,9 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                             images.push({
                                 id: inlineObjectId,
                                 contentUri: contentUri,
-                                alt: altText
+                                alt: altText,
+                                title: embeddedObject.title || '',
+                                description: embeddedObject.description || ''
                             });
                         }
                     }
