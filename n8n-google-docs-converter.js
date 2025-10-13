@@ -144,15 +144,23 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
             if (element.textRun) {
                 let content = element.textRun.content;
                 
-                // Process line breaks
-                if (content.endsWith('\n')) {
-                    content = content.slice(0, -1);
+                // Process line breaks - remove trailing newlines
+                while (content.endsWith('\n') || content.endsWith('\\n')) {
+                    if (content.endsWith('\\n')) {
+                        content = content.slice(0, -2);
+                    } else if (content.endsWith('\n')) {
+                        content = content.slice(0, -1);
+                    }
                 }
-                content = content.replace(/\n/g, '<br>');
                 
                 if (content) {
+                    // First apply text styles (which will escape HTML)
                     const linkResult = processLink(content, element.textRun.textStyle);
-                    result += safeToString(linkResult);
+                    // Then replace newlines with <br> (after escaping)
+                    const processedResult = safeToString(linkResult)
+                        .replace(/\\n/g, '<br>')
+                        .replace(/\n/g, '<br>');
+                    result += processedResult;
                 }
             } else if (element.inlineObjectElement) {
                 // Process inline objects (images, etc.) - create placeholder
@@ -631,7 +639,7 @@ function fixTableCells(html) {
         content = content.trim();
         
         if (!content) {
-            return `<${tag}><p>\n</p></${tag}>`;
+            return `<${tag}><p></p></${tag}>`;
         }
         
         if (content.startsWith('<p>')) {
@@ -642,7 +650,7 @@ function fixTableCells(html) {
             return `<${tag}>${content}</${tag}>`;
         }
         
-        return `<${tag}><p>${content}\n</p></${tag}>`;
+        return `<${tag}><p>${content}</p></${tag}>`;
     });
 }
 
@@ -684,12 +692,10 @@ function wordPressCompatibleClean(html) {
         // Add rel="noopener" to links if not present
         .replace(/<a href="([^"]*)" target="_blank"(?![^>]*rel=)/g, '<a href="$1" target="_blank" rel="noopener"')
         
-        // Add line breaks after closing tags
-        .replace(/<\/(h[1-6]|p|li)>/g, '\n</$1>')
-        
-        // Remove extra spaces but preserve line breaks
+        // Remove extra spaces (including newlines inside tags)
         .replace(/ +/g, ' ')
         .replace(/>\s+</g, '><')
+        .replace(/\n/g, '')
         .trim();
     
     // CRITICAL: Fix table cell structure
