@@ -261,12 +261,11 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         if (nestingLevel.glyphType) {
             switch (nestingLevel.glyphType) {
                 case 'DECIMAL':
+                case 'ZERO_DECIMAL':
                 case 'ALPHA':
                 case 'UPPER_ALPHA':
-                case 'LOWER_ALPHA':
                 case 'ROMAN':
                 case 'UPPER_ROMAN':
-                case 'LOWER_ROMAN':
                     return 'ol';
                 case 'GLYPH_TYPE_UNSPECIFIED':
                     return 'ul'; // Always bulleted for unspecified type
@@ -274,16 +273,6 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                     break;
             }
         }
-        
-        // Check for glyph format that indicates numbered list
-        if (nestingLevel.glyphFormat) {
-            const format = nestingLevel.glyphFormat;
-            // Numbered formats contain % followed by number
-            if (format.includes('%0') || format.includes('%1') || format.includes('%2')) {
-                return 'ol';
-            }
-        }
-        
         
         return 'ul'; // Default to bulleted
     }
@@ -711,44 +700,13 @@ function wordPressCompatibleClean(html) {
 // Uncomment and adapt to your data:
 
 try {
-    // IMPORTANT: Document structure is in body.content, not in body!
-    let documentStructure;
-    let documentLists = null;
-    let inlineObjects = null;
-    
-    // Check different data structure variants
-    if ($json.body && $json.body.content) {
-        // Standard Google Docs API response
-        documentStructure = $json.body.content;
-        documentLists = $json.lists || $json.body.lists;
-        inlineObjects = $json.inlineObjects || $json.body.inlineObjects;
-    } else if ($json.content) {
-        // If content is at top level
-        documentStructure = $json.content;
-        documentLists = $json.lists;
-        inlineObjects = $json.inlineObjects;
-    } else if (Array.isArray($json.body)) {
-        // If body is already an array
-        documentStructure = $json.body;
-        documentLists = $json.lists;
-        inlineObjects = $json.inlineObjects;
-    } else if ($json.body && typeof $json.body === 'object') {
-        // Try to find content in body object
-        const bodyKeys = Object.keys($json.body);
-        const contentKey = bodyKeys.find(key => Array.isArray($json.body[key]));
-        if (contentKey) {
-            documentStructure = $json.body[contentKey];
-        }
-        documentLists = $json.lists || $json.body.lists;
-        inlineObjects = $json.inlineObjects || $json.body.inlineObjects;
-    }
-    
-    if (!documentStructure) {
-        throw new Error('No document structure found. Expected array in body.content or similar field. Received: ' + JSON.stringify(Object.keys($json)));
-    }
+    // Google Docs API response structure
+    const documentStructure = $json.body?.content;
+    const documentLists = $json.lists;
+    const inlineObjects = $json.inlineObjects;
     
     if (!Array.isArray(documentStructure)) {
-        throw new Error('Document structure must be an array. Received: ' + typeof documentStructure);
+        throw new Error('Expected body.content array. Received: ' + JSON.stringify(Object.keys($json)));
     }
     
     const result = convertGoogleDocsToHtml(documentStructure, documentLists, inlineObjects);
