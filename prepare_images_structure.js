@@ -9,10 +9,9 @@ return images.map((image, index) => ({
   contentUri: image.contentUri,
   alt: image.alt,
   title: image.title,
-  description: image.description,
   
   fileName: (() => {
-    const baseName = image.title || image.alt || image.description || `image-${image.id}`;
+    const baseName = image.title || image.alt || `image-${image.id}`;
     
     let extension = '.jpg';
     if (image.contentUri) {

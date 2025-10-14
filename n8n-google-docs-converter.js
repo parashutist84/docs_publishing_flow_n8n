@@ -181,8 +181,7 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                                 id: inlineObjectId,
                                 contentUri: contentUri,
                                 alt: altText,
-                                title: embeddedObject.title || '',
-                                description: embeddedObject.description || ''
+                                title: embeddedObject.title || ''
                             });
                         }
                     }
