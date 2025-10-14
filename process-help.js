@@ -1,14 +1,14 @@
-// Проверяем условие isHelp
+// Check isHelp condition
 if ($node['Webhook'].json.body.isHelp !== true) {
     return $input.all();
   }
   
-  // Функция для оборачивания блоков в div
+  // Function to wrap blocks in divs
   function wrapBlocksInDivs(html) {
-    // Регулярное выражение для поиска заголовков
+    // Regular expression to find headers
     const headerRegex = /(<h[1-6][^>]*>.*?<\/h[1-6]>)/gi;
     
-    // Разбиваем HTML по заголовкам, сохраняя сами заголовки
+    // Split HTML by headers, keeping the headers themselves
     const parts = html.split(headerRegex);
     
     const blocks = [];
@@ -18,29 +18,29 @@ if ($node['Webhook'].json.body.isHelp !== true) {
       const part = parts[i].trim();
       if (!part) continue;
       
-      // Проверяем, является ли часть заголовком
+      // Check if part is a header
       if (headerRegex.test(part)) {
-        headerRegex.lastIndex = 0; // Сброс индекса
+        headerRegex.lastIndex = 0; // Reset index
         
-        // Если есть накопленный блок, сохраняем его
+        // If there is accumulated block, save it
         if (currentBlock) {
           blocks.push(`<div>\n${currentBlock}\n</div>`);
         }
         
-        // Начинаем новый блок с заголовка
+        // Start new block with header
         currentBlock = part;
       } else {
-        // Добавляем контент к текущему блоку
+        // Add content to current block
         if (currentBlock) {
           currentBlock += '\n' + part;
         } else {
-          // Это текст в начале документа без заголовка
+          // This is text at the beginning of document without header
           currentBlock = part;
         }
       }
     }
     
-    // Добавляем последний блок
+    // Add last block
     if (currentBlock) {
       blocks.push(`<div>\n${currentBlock}\n</div>`);
     }
@@ -48,7 +48,7 @@ if ($node['Webhook'].json.body.isHelp !== true) {
     return blocks.join('\n');
   }
   
-  // Обрабатываем каждый элемент входных данных
+  // Process each input data element
   return $input.all().map(item => {
     if (item.json.html) {
       return {

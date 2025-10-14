@@ -1,4 +1,3 @@
-console.log($node['Convert Google DOCS to HTML'].json)
 const converterResult = $node['Convert Google DOCS to HTML'].json;
 
 const html = converterResult.htmlWordPress;

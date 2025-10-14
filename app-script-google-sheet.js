@@ -39,7 +39,7 @@ function onEditTrigger(e) {
         var resp = UrlFetchApp.fetch(url, options);
         sheet.getRange(row, 6).setValue("Sent: " + resp.getResponseCode());
       } else {
-        // Если галочку убрали
+        // If checkbox was unchecked
         sheet.getRange(range.getRow(), 6).setValue("Not sent");
       }
     } catch (err) {
