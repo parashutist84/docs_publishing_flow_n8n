@@ -175,13 +175,21 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                         altText = embeddedObject.description || embeddedObject.title || '';
                         contentUri = embeddedObject.imageProperties?.contentUri || '';
                         
+                        // Check if this is an icon (contains [icon] marker)
+                        let omitUpload = false;
+                        if (altText.includes('[icon]')) {
+                            omitUpload = true;
+                            altText = altText.replace(/\[icon\]/g, '').trim();
+                        }
+                        
                         // Add to images array if it's actually an image
                         if (contentUri) {
                             images.push({
                                 id: inlineObjectId,
                                 contentUri: contentUri,
                                 alt: altText,
-                                title: embeddedObject.title || ''
+                                title: embeddedObject.title || '',
+                                omit_upload: omitUpload
                             });
                         }
                     }

@@ -4,7 +4,9 @@ const converterResult = $node['Convert Google DOCS to HTML'].json;
 const html = converterResult.htmlWordPress;
 const images = converterResult.images || [];
 
-return images.map((image, index) => ({
+return images
+  .filter(image => !image.omit_upload)
+  .map((image, index) => ({
   id: image.id,
   contentUri: image.contentUri,
   alt: image.alt,
