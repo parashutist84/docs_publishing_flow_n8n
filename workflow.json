@@ -13,12 +13,13 @@
         0,
         0
       ],
-      "id": "3a77b511-1533-4a5b-8251-c1ffed95c107",
+      "id": "7874b596-5b8d-48dc-983b-932addd787f7",
       "name": "Webhook",
       "webhookId": "61193a00-dce7-4d57-bc8c-75789846daae"
     },
     {
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "get",
         "documentURL": "={{ $json.body.docId }}",
         "simple": false
@@ -29,12 +30,12 @@
         176,
         0
       ],
-      "id": "e7ca33ba-d9af-4383-affe-af3ab2ba4986",
+      "id": "1867da97-ee1e-44a8-bd8b-eee76f5f59ef",
       "name": "Get a document",
       "credentials": {
-        "googleDocsOAuth2Api": {
-          "id": "zyHGro5W2s6Myu5l",
-          "name": "Google Docs account"
+        "googleApi": {
+          "id": "q0RH8mKgQAahSr1L",
+          "name": "Google Service Account account"
         }
       }
     },
@@ -48,7 +49,7 @@
         1040,
         176
       ],
-      "id": "0660f11f-f059-4a09-958f-bd7a03e10bfe",
+      "id": "013c3d30-c129-4d8b-a6be-beee44fbb84b",
       "name": "Loop Over Items"
     },
     {
@@ -59,7 +60,7 @@
         1280,
         16
       ],
-      "id": "97e9d00f-e022-4061-bc04-3da3b115352a",
+      "id": "1f711019-368a-4c8f-ba62-fa892fa7b3fd",
       "name": "Merge"
     },
     {
@@ -72,7 +73,7 @@
         832,
         176
       ],
-      "id": "38a5d594-6589-4bfe-b7cc-81f05a8b4aa5",
+      "id": "2dd4ed04-6d52-4b77-922a-463630a6533c",
       "name": "Prepare images metadata"
     },
     {
@@ -85,14 +86,14 @@
         352,
         0
       ],
-      "id": "6cad7584-38a9-4322-a4d7-8816abc14e6d",
+      "id": "4c08d24a-4ea5-40a3-b7b6-522b3e0aa659",
       "name": "Convert Google DOCS to HTML"
     },
     {
       "parameters": {
         "url": "={{ $json.contentUri }}",
         "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleDocsOAuth2Api",
+        "nodeCredentialType": "googleApi",
         "options": {
           "response": {
             "response": {
@@ -108,12 +109,12 @@
         1232,
         192
       ],
-      "id": "12fe7d57-08c9-45a7-b628-a4bdec69bcfd",
+      "id": "599c24aa-b904-47cd-9c1e-1bfeefd2c23a",
       "name": "Fetch image from Google DOCs",
       "credentials": {
-        "googleDocsOAuth2Api": {
-          "id": "zyHGro5W2s6Myu5l",
-          "name": "Google Docs account"
+        "googleApi": {
+          "id": "q0RH8mKgQAahSr1L",
+          "name": "Google Service Account account"
         }
       }
     },
@@ -162,12 +163,12 @@
         1568,
         192
       ],
-      "id": "266de84d-ea4c-4d33-8ce4-7d5e77f3130d",
+      "id": "4e2914ac-0090-4896-866b-66b37da9234f",
       "name": "Upload image to WP media",
       "credentials": {
         "httpBasicAuth": {
-          "id": "1EYVmHpkSJOgcIUv",
-          "name": "Unnamed credential"
+          "id": "rQKBdPROf1VPPiuJ",
+          "name": "Wordpress API access"
         }
       }
     },
@@ -181,7 +182,7 @@
         1440,
         16
       ],
-      "id": "0eecd17c-15c8-441b-a00e-c8f549810c95",
+      "id": "14a33e7b-8ef2-4029-bd2d-611ef7de26b1",
       "name": "Replace image placeholders"
     },
     {
@@ -210,12 +211,12 @@
         1968,
         16
       ],
-      "id": "e1e53b89-25fe-4b30-9d82-28850736976f",
+      "id": "1ec92d11-8bd7-403f-919e-3802d4f87d02",
       "name": "Update document in WP",
       "credentials": {
         "httpBasicAuth": {
-          "id": "1EYVmHpkSJOgcIUv",
-          "name": "Unnamed credential"
+          "id": "rQKBdPROf1VPPiuJ",
+          "name": "Wordpress API access"
         }
       }
     },
@@ -245,12 +246,12 @@
         560,
         0
       ],
-      "id": "6e0e3fa7-0c6f-480d-beb8-1ce8128452f7",
+      "id": "949b40da-3aa9-46f2-8c2d-636caa9165b7",
       "name": "Post a document to WP",
       "credentials": {
         "httpBasicAuth": {
-          "id": "1EYVmHpkSJOgcIUv",
-          "name": "Unnamed credential"
+          "id": "rQKBdPROf1VPPiuJ",
+          "name": "Wordpress API access"
         }
       }
     },
@@ -264,7 +265,7 @@
         1408,
         192
       ],
-      "id": "faa83453-a70f-4e02-a309-29e421ac7dc6",
+      "id": "5aec1f83-e293-4c6e-b425-52d11a79c482",
       "name": "Add file name"
     },
     {
@@ -272,7 +273,7 @@
         "method": "PUT",
         "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $node['Webhook'].json.body.spreadsheetId }}/values/{{ encodeURIComponent($node['Webhook'].json.body.sheetName) }}!F{{ $node['Webhook'].json.body.row }}:F{{ $node['Webhook'].json.body.row }}?valueInputOption=USER_ENTERED&includeValuesInResponse=true",
         "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "nodeCredentialType": "googleApi",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"range\": \"{{ $node['Webhook'].json.body.sheetName }}!F{{ $node['Webhook'].json.body.row }}:F{{ $node['Webhook'].json.body.row }}\",\n  \"majorDimension\": \"ROWS\",\n  \"values\": [[\"{{ $json.id ? 'Success' : 'Failed' }}\"]]\n}",
@@ -284,12 +285,12 @@
         2176,
         16
       ],
-      "id": "066fb7c8-e79b-4ee2-96b3-fef418e34fd6",
+      "id": "f500cc28-4596-4b4e-af65-3f4760b1d51b",
       "name": "Post status to Google sheet",
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "e5PYOMO3aLZrxUSF",
-          "name": "Google Sheets account"
+        "googleApi": {
+          "id": "q0RH8mKgQAahSr1L",
+          "name": "Google Service Account account"
         }
       }
     },
@@ -303,7 +304,7 @@
         1776,
         16
       ],
-      "id": "82eef4db-ed78-4737-b148-78d0dfc41cfb",
+      "id": "38573b2a-8721-463a-81ad-2efe5599ef65",
       "name": "Beautyify HTML"
     },
     {
@@ -316,7 +317,7 @@
         1600,
         16
       ],
-      "id": "fbec43d3-f99b-432d-b5c6-903e086b7500",
+      "id": "20a021d0-4147-486f-9153-769e7487e568",
       "name": "Process help"
     }
   ],
@@ -455,11 +456,6 @@
         ]
       ]
     },
-    "Post status to Google sheet": {
-      "main": [
-        []
-      ]
-    },
     "Replace image placeholders": {
       "main": [
         [
@@ -494,15 +490,18 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "9dResy1Wkxyfiesi"
   },
-  "versionId": "9a41baee-258f-44b0-94e5-7809bcc3eded",
+  "versionId": "b8014450-1d1d-4746-bc60-6d6c650ea166",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "68fc3d4f6984a31b00b428650bb5281e3995224a2d7456c24f0879a819a3e2b0"
+    "instanceId": "8d0d604ee3fa5812d8a83eb77a8e196e1e0ef5c26765eb3dc3671872b51bf04c"
   },
-  "id": "VKAaJjsKPgOeNdf8",
+  "id": "9dResy1Wkxyfiesi",
   "tags": []
 }
