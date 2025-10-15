@@ -114,9 +114,19 @@ function formatHtml(html) {
         
         if (shouldInline) {
           // Keep everything on one line
-          const fullTag = tag + content + closingTag;
+          let fullTag = tag + content + closingTag;
+          let nextPos = closingPos + closingTag.length;
+          
+          // Check if there's punctuation immediately after the closing tag
+          const afterTag = html.substring(nextPos, nextPos + 10);
+          const punctMatch = afterTag.match(/^([.,;:!?)\]}\-\u2013\u2014]+)/);
+          if (punctMatch) {
+            fullTag += punctMatch[1];
+            nextPos += punctMatch[1].length;
+          }
+          
           result += ' '.repeat(indent) + fullTag + '\n';
-          pos = closingPos + closingTag.length;
+          pos = nextPos;
         } else {
           // Format as block
           result += ' '.repeat(indent) + tag + '\n';
