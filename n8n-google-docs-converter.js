@@ -19,6 +19,7 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
     let openListTags = [];
     let currentNestingLevel = -1;
     let images = []; // Collect images during processing
+    let headingMap = {}; // Map headingId to heading text
 
     // RGB color processing
     function rgbToHex(rgb) {
@@ -58,6 +59,18 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
             return '';
         }
         return String(value);
+    }
+
+    // Convert heading text to topic parameter format
+    function headingToTopic(headingText) {
+        return headingText
+            .toLowerCase()
+            .trim()
+            .replace(/\n/g, '') // Remove newlines
+            .replace(/[^\w\s-]/g, '') // Remove special characters except spaces and existing dashes
+            .replace(/\s+/g, '-') // Replace spaces with dashes
+            .replace(/-+/g, '-') // Replace multiple consecutive dashes with single dash
+            .replace(/^-|-$/g, ''); // Remove leading/trailing dashes
     }
 
     // Apply text styles
@@ -129,9 +142,27 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
 
     // Link processing
     function processLink(content, textStyle) {
-        if (textStyle?.link?.url) {
+        if (textStyle?.link) {
             const styledContent = applyTextStyles(content, {...textStyle, link: undefined});
-            return `<a href="${escapeHtml(textStyle.link.url)}" target="_blank">${styledContent}</a>`;
+            
+            // External link with URL
+            if (textStyle.link.url) {
+                return `<a href="${escapeHtml(textStyle.link.url)}" target="_blank">${styledContent}</a>`;
+            }
+            
+            // Internal link with headingId (anchor)
+            if (textStyle.link.headingId) {
+                const headingId = textStyle.link.headingId;
+                const headingText = headingMap[headingId];
+                
+                if (headingText) {
+                    const anchor = headingToTopic(headingText);
+                    return `<a href="#${anchor}">${styledContent}</a>`;
+                }
+                
+                // If heading not found, still return styled content with underline
+                return styledContent;
+            }
         }
         return applyTextStyles(content, textStyle);
     }
@@ -526,6 +557,28 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         
         tableHtml += '</table>';
         return tableHtml;
+    }
+
+    // Build heading map first (for internal links)
+    if (Array.isArray(docStructure)) {
+        for (const item of docStructure) {
+            if (item.paragraph?.paragraphStyle?.headingId) {
+                const headingId = item.paragraph.paragraphStyle.headingId;
+                const elements = item.paragraph.elements || [];
+                let headingText = '';
+                
+                // Extract text from all text runs in the heading
+                for (const element of elements) {
+                    if (element.textRun?.content) {
+                        headingText += element.textRun.content;
+                    }
+                }
+                
+                if (headingText) {
+                    headingMap[headingId] = headingText;
+                }
+            }
+        }
     }
 
     // Main document structure processing
