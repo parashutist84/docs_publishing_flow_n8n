@@ -20,6 +20,60 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
     let currentNestingLevel = -1;
     let images = []; // Collect images during processing
     let headingMap = {}; // Map headingId to heading text
+    
+    // Special patterns configuration
+    const specialPatterns = [
+        {
+            name: 'EXAMPLE',
+            regex: /EXAMPLE:\s*(.*?)!!!\s*(?:(.*?)!!!)?/s,
+            handler: (match) => {
+                const caption = match[1]?.trim();
+                const content = match[2]?.trim();
+                return `<div class="example-container"><div class="example-title">${!!content ? caption : ''}</div><div class="example-content">${!content ? caption : content}</div></div>`;
+            }
+        },
+        {
+            name: 'NOTE',
+            regex: /NOTE:\s*(.*?)!!!/s,
+            handler: (match) => {
+                const content = match[1]?.trim();
+                return `<div class="note-container"><div class="note-caption"></div><div class="note-content">${content}</div></div>`;
+            }
+        },
+        {
+            name: 'WARNING',
+            regex: /WARNING:\s*(.*?)!!!/s,
+            handler: (match) => {
+                const content = match[1]?.trim();
+                return `<div class="warning-container"><div class="warning-caption"></div><div class="warning-content">${content}</div></div>`;
+            }
+        },
+        {
+            name: 'VIDEO',
+            regex: /VIDEO:\s*(.*?)!!!/s,
+            handler: (match) => {
+                const content = match[1]?.trim();
+                return `<div class="video-container"><div class="video-caption"></div><div class="video-content">${content}</div></div>`;
+            }
+        },
+        {
+            name: 'BUSINESS',
+            regex: /BUSINESS:\s*(.*?)!!!\s*(?:(.*?)!!!)?/s,
+            handler: (match) => {
+                const title = match[1]?.trim();
+                const content = match[2]?.trim();
+                return `<div class="business-container"><div class="business-caption"></div><div class="business-title">${!!content ? title : ''}</div><div class="business-content">${!content ? title : content}</div></div>`;
+            }
+        },
+        {
+            name: 'BENEFITS',
+            regex: /BENEFITS:\s*(.*?)!!!/s,
+            handler: (match) => {
+                const content = match[1]?.trim();
+                return `<div class="h_benefits">${content}</div>`;
+            }
+        }
+    ];
 
     // RGB color processing
     function rgbToHex(rgb) {
@@ -323,6 +377,21 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         return 'ul'; // Default to bulleted
     }
 
+    // Check if content matches any special pattern
+    function checkSpecialPatterns(content) {
+        for (const pattern of specialPatterns) {
+            const match = content.match(pattern.regex);
+            if (match) {
+                return {
+                    matched: true,
+                    html: pattern.handler(match),
+                    name: pattern.name
+                };
+            }
+        }
+        return { matched: false };
+    }
+
     // Determine heading type
     function getHeadingTag(namedStyleType) {
         switch (namedStyleType) {
@@ -344,6 +413,17 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         
         const content = processTextElements(elements);
         if (!content.trim()) return '';
+
+        // Check for special patterns
+        const patternResult = checkSpecialPatterns(content);
+        if (patternResult.matched) {
+            // Close open lists before special block
+            while (openListTags.length > 0) {
+                html += `</${openListTags.pop()}>`;
+            }
+            currentListId = null;
+            return patternResult.html;
+        }
 
         // Check if this is a list item
         if (handleList(paragraph)) {
@@ -620,9 +700,16 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
 
 // Function for basic HTML cleanup for WordPress
 function cleanHtmlForWordPress(html) {
+    // List of class prefixes to keep (for special blocks)
+    const keepClassPrefixes = ['h_benefits', 'example-', 'business-', 'note-', 'warning-', 'video-'];
+    const keepClassPattern = keepClassPrefixes.map(p => p.replace('-', '\\-')).join('|');
+    const classRegex = new RegExp(`\\s+class="(?!(?:${keepClassPattern}))[^"]*"`, 'g');
+    
     return html
         // Remove all inline styles
         .replace(/\s+style="[^"]*"/g, '')
+        // Keep special classes but remove other class attributes
+        .replace(classRegex, '')
         // Remove data attributes
         .replace(/\s+data-[^=]*="[^"]*"/g, '')
         // Simplify span tags without attributes
@@ -639,18 +726,26 @@ function cleanHtmlForWordPress(html) {
 
 // Function for ultra HTML cleanup for WordPress
 function ultraCleanHtmlForWordPress(html) {
+    const keepClassPrefixes = ['h_benefits', 'example-', 'business-', 'note-', 'warning-', 'video-'];
+    
     return html
-        // Remove ALL attributes except href for links
-        .replace(/<([^a\/][^>]*?)\s+[^>]*?>/g, '<$1>')
+        // Remove ALL attributes except href for links and class for special divs
+        .replace(/<([^a\/][^>]*?)\s+[^>]*?>/g, (match, tag) => {
+            // Preserve special classes on div tags
+            for (const prefix of keepClassPrefixes) {
+                if (match.includes(`class="${prefix}`)) {
+                    const classMatch = match.match(/class="([^"]*)"/);
+                    if (classMatch) return `<${tag} class="${classMatch[1]}">`;
+                }
+            }
+            return `<${tag}>`;
+        })
         .replace(/<\/([^>]+)\s+[^>]*?>/g, '</$1>')
         // Restore links with href
         .replace(/<a[^>]*href="([^"]*)"[^>]*>/g, '<a href="$1">')
         // Remove all span tags, keeping content
         .replace(/<span[^>]*>/g, '')
         .replace(/<\/span>/g, '')
-        // Remove all div tags, keeping content
-        .replace(/<div[^>]*>/g, '')
-        .replace(/<\/div>/g, '')
         // Remove empty paragraphs
         .replace(/<p[^>]*>\s*<\/p>/g, '')
         // Remove extra spaces and line breaks
@@ -667,9 +762,11 @@ function wordPressSafeTagsOnly(html) {
         'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
         'ul', 'ol', 'li',
         'table', 'tr', 'td', 'th', 'thead', 'tbody',
-        'a', 'img',
+        'a', 'img', 'div',
         'blockquote', 'pre', 'code'
     ];
+    
+    const keepClassPrefixes = ['h_benefits', 'example-', 'business-', 'note-', 'warning-', 'video-'];
     
     // Remove all disallowed tags
     let cleaned = html.replace(/<\/?([a-zA-Z0-9]+)[^>]*>/g, (match, tagName) => {
@@ -678,10 +775,20 @@ function wordPressSafeTagsOnly(html) {
             return ''; // Remove disallowed tag
         }
         
-        // For allowed tags remove attributes (except href for links)
+        // For allowed tags remove attributes (except href for links and class for special divs)
         if (tag === 'a' && match.includes('href=')) {
             const href = match.match(/href="([^"]*)"/);
             return href ? `<${match.startsWith('</') ? '/' : ''}a${href ? ` href="${href[1]}"` : ''}>` : `<${match.startsWith('</') ? '/' : ''}a>`;
+        }
+        
+        // Preserve special classes on div tags
+        if (tag === 'div') {
+            for (const prefix of keepClassPrefixes) {
+                if (match.includes(`class="${prefix}`)) {
+                    const classMatch = match.match(/class="([^"]*)"/);
+                    if (classMatch) return `<${match.startsWith('</') ? '/' : ''}div${!match.startsWith('</') ? ` class="${classMatch[1]}"` : ''}>`;
+                }
+            }
         }
         
         return `<${match.startsWith('</') ? '/' : ''}${tag}>`;
@@ -716,13 +823,18 @@ function fixTableCells(html) {
 
 // WordPress-compatible cleanup based on working example
 function wordPressCompatibleClean(html) {
+    const keepClassPrefixes = ['h_benefits', 'example-', 'business-', 'note-', 'warning-', 'video-'];
+    const keepClassPattern = keepClassPrefixes.map(p => p.replace('-', '\\-')).join('|');
+    const classRegex = new RegExp(`\\s+class="(?!(?:${keepClassPattern}))[^"]*"`, 'g');
+    
     let cleaned = html
         // CRITICAL: Remove ALL HTML comments (ModSecurity blocks)
         .replace(/<!--[\s\S]*?-->/g, '')
         
         // Remove all inline styles and attributes except basic ones
         .replace(/\s+style="[^"]*"/g, '')
-        .replace(/\s+class="[^"]*"/g, '')
+        // Keep special classes but remove others
+        .replace(classRegex, '')
         .replace(/\s+id="[^"]*"/g, '')
         .replace(/\s+data-[^=]*="[^"]*"/g, '')
         
