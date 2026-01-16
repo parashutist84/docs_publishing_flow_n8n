@@ -389,7 +389,8 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                 return {
                     matched: true,
                     html: pattern.handler(match),
-                    name: pattern.name
+                    name: pattern.name,
+                    match: match
                 };
             }
         }
@@ -414,6 +415,7 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         const paragraph = paragraphData.paragraph;
         const elements = paragraph.elements || [];
         const paragraphStyle = paragraph.paragraphStyle || {};
+        const isListItem = !!paragraph.bullet;
         
         const content = processTextElements(elements);
         if (!content.trim()) return '';
@@ -424,29 +426,18 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
             const pattern = specialPatterns.find(p => p.name === pendingSpecial.name);
             const match = pattern ? pendingSpecial.text.match(pattern.regex) : null;
             if (match) {
+                const blockHtml = pattern.handler(match);
+                const pendingIsListItem = pendingSpecial.isListItem;
+                pendingSpecial = null;
+                if (pendingIsListItem) {
+                    return `<li>${blockHtml}</li>`;
+                }
                 // Close open lists before special block
                 while (openListTags.length > 0) {
                     html += `</${openListTags.pop()}>`;
                 }
                 currentListId = null;
-                pendingSpecial = null;
-                return pattern.handler(match);
-            }
-            return '';
-        }
-
-        // Continue multi-paragraph special block if open
-        if (pendingSpecial) {
-            pendingSpecial.text += `<br>${content}`;
-            const pattern = specialPatterns.find(p => p.name === pendingSpecial.name);
-            const match = pattern ? pendingSpecial.text.match(pattern.regex) : null;
-            if (match && pattern) {
-                while (openListTags.length > 0) {
-                    html += `</${openListTags.pop()}>`;
-                }
-                currentListId = null;
-                pendingSpecial = null;
-                return pattern.handler(match);
+                return blockHtml;
             }
             return '';
         }
@@ -454,6 +445,14 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         // Check for special patterns
         const patternResult = checkSpecialPatterns(content);
         if (patternResult.matched) {
+            if (isListItem) {
+                handleList(paragraph);
+                const startIndex = patternResult.match?.index ?? 0;
+                const endIndex = startIndex + (patternResult.match?.[0]?.length || 0);
+                const before = content.slice(0, startIndex);
+                const after = content.slice(endIndex);
+                return `<li>${before}${patternResult.html}${after}</li>`;
+            }
             // Close open lists before special block
             while (openListTags.length > 0) {
                 html += `</${openListTags.pop()}>`;
@@ -467,24 +466,16 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         for (const pattern of specialPatterns) {
             const startToken = `${pattern.name}:`;
             if (contentText.startsWith(startToken) && !contentText.includes('!!!')) {
-                // Close open lists before special block
-                while (openListTags.length > 0) {
-                    html += `</${openListTags.pop()}>`;
+                if (isListItem) {
+                    handleList(paragraph);
+                } else {
+                    // Close open lists before special block
+                    while (openListTags.length > 0) {
+                        html += `</${openListTags.pop()}>`;
+                    }
+                    currentListId = null;
                 }
-                currentListId = null;
-                pendingSpecial = { name: pattern.name, text: content };
-                return '';
-            }
-        }
-
-        // Start multi-paragraph special block when no terminator yet
-        for (const pattern of specialPatterns) {
-            if (content.trim().startsWith(`${pattern.name}:`) && !content.includes('!!!')) {
-                while (openListTags.length > 0) {
-                    html += `</${openListTags.pop()}>`;
-                }
-                currentListId = null;
-                pendingSpecial = { name: pattern.name, text: content };
+                pendingSpecial = { name: pattern.name, text: content, isListItem };
                 return '';
             }
         }
