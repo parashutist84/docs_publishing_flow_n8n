@@ -253,6 +253,7 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                 
                 // Get image data from inlineObjects if available
                 let altText = '';
+                let safeAltText = '';
                 let contentUri = '';
                 if (inlineObjects && inlineObjects[inlineObjectId]) {
                     const embeddedObject = inlineObjects[inlineObjectId].inlineObjectProperties?.embeddedObject;
@@ -267,12 +268,14 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                             altText = altText.replace(/\[icon\]/g, '').trim();
                         }
                         
+                        safeAltText = escapeHtml(altText);
+                        
                         // Add to images array if it's actually an image
                         if (contentUri) {
                             images.push({
                                 id: inlineObjectId,
                                 contentUri: contentUri,
-                                alt: altText,
+                                alt: safeAltText,
                                 title: embeddedObject.title || '',
                                 omit_upload: omitUpload
                             });
@@ -281,7 +284,7 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                 }
                 
                 // Create image placeholder
-                result += `[[IMG:${inlineObjectId}|${altText}]]`;
+                result += `[[IMG:${inlineObjectId}|${safeAltText}]]`;
             }
         }
         
