@@ -20,6 +20,7 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
     let currentNestingLevel = -1;
     let images = []; // Collect images during processing
     let headingMap = {}; // Map headingId to heading text
+    let pendingSpecial = null; // Collect multi-paragraph special blocks
     
     // Special patterns configuration
     const specialPatterns = [
@@ -417,6 +418,39 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         const content = processTextElements(elements);
         if (!content.trim()) return '';
 
+        // Continue multi-paragraph special block if pending
+        if (pendingSpecial) {
+            pendingSpecial.text += `<br>${content}`;
+            const pattern = specialPatterns.find(p => p.name === pendingSpecial.name);
+            const match = pattern ? pendingSpecial.text.match(pattern.regex) : null;
+            if (match) {
+                // Close open lists before special block
+                while (openListTags.length > 0) {
+                    html += `</${openListTags.pop()}>`;
+                }
+                currentListId = null;
+                pendingSpecial = null;
+                return pattern.handler(match);
+            }
+            return '';
+        }
+
+        // Continue multi-paragraph special block if open
+        if (pendingSpecial) {
+            pendingSpecial.text += `<br>${content}`;
+            const pattern = specialPatterns.find(p => p.name === pendingSpecial.name);
+            const match = pattern ? pendingSpecial.text.match(pattern.regex) : null;
+            if (match && pattern) {
+                while (openListTags.length > 0) {
+                    html += `</${openListTags.pop()}>`;
+                }
+                currentListId = null;
+                pendingSpecial = null;
+                return pattern.handler(match);
+            }
+            return '';
+        }
+
         // Check for special patterns
         const patternResult = checkSpecialPatterns(content);
         if (patternResult.matched) {
@@ -426,6 +460,33 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
             }
             currentListId = null;
             return patternResult.html;
+        }
+
+        // Start multi-paragraph special block if it begins but not finished
+        const contentText = content.replace(/<[^>]*>/g, '').trim();
+        for (const pattern of specialPatterns) {
+            const startToken = `${pattern.name}:`;
+            if (contentText.startsWith(startToken) && !contentText.includes('!!!')) {
+                // Close open lists before special block
+                while (openListTags.length > 0) {
+                    html += `</${openListTags.pop()}>`;
+                }
+                currentListId = null;
+                pendingSpecial = { name: pattern.name, text: content };
+                return '';
+            }
+        }
+
+        // Start multi-paragraph special block when no terminator yet
+        for (const pattern of specialPatterns) {
+            if (content.trim().startsWith(`${pattern.name}:`) && !content.includes('!!!')) {
+                while (openListTags.length > 0) {
+                    html += `</${openListTags.pop()}>`;
+                }
+                currentListId = null;
+                pendingSpecial = { name: pattern.name, text: content };
+                return '';
+            }
         }
 
         // Check if this is a list item
