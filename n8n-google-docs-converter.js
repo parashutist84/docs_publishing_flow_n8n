@@ -20,6 +20,9 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
     let currentNestingLevel = -1;
     let images = []; // Collect images during processing
     let headingMap = {}; // Map headingId to heading text
+    let headingAnchorMap = {}; // Map headingId to unique anchor id
+    let headingSlugCounts = {}; // Track duplicates for unique anchors
+    let referencedHeadingIds = new Set(); // headingIds referenced by links
     let pendingSpecial = null; // Collect multi-paragraph special blocks
     
     // Special patterns configuration
@@ -208,10 +211,9 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
             // Internal link with headingId (anchor)
             if (textStyle.link.headingId) {
                 const headingId = textStyle.link.headingId;
-                const headingText = headingMap[headingId];
-                
-                if (headingText) {
-                    const anchor = headingToTopic(headingText);
+                referencedHeadingIds.add(headingId);
+                const anchor = headingAnchorMap[headingId] || headingToTopic(headingMap[headingId] || '');
+                if (anchor) {
                     return `<a href="#${anchor}">${styledContent}</a>`;
                 }
                 
@@ -495,6 +497,10 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
         const headingTag = getHeadingTag(paragraphStyle.namedStyleType);
         if (headingTag) {
             let styles = [];
+            let headingIdAttr = '';
+            if (paragraphStyle.headingId && referencedHeadingIds.has(paragraphStyle.headingId) && headingAnchorMap[paragraphStyle.headingId]) {
+                headingIdAttr = ` id="${headingAnchorMap[paragraphStyle.headingId]}"`;
+            }
             
             // Alignment for headings
             if (paragraphStyle.alignment && paragraphStyle.alignment !== 'START') {
@@ -503,7 +509,7 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
             }
             
             const styleAttr = styles.length > 0 ? ` style="${styles.join('; ')}"` : '';
-            return `<${headingTag}${styleAttr}>${content}</${headingTag}>`;
+            return `<${headingTag}${headingIdAttr}${styleAttr}>${content}</${headingTag}>`;
         }
 
         // Regular paragraph
@@ -711,6 +717,22 @@ function convertGoogleDocsToHtml(docStructure, documentLists = null, inlineObjec
                 
                 if (headingText) {
                     headingMap[headingId] = headingText;
+                    const baseSlug = headingToTopic(headingText);
+                    if (baseSlug) {
+                        const count = (headingSlugCounts[baseSlug] || 0) + 1;
+                        headingSlugCounts[baseSlug] = count;
+                        headingAnchorMap[headingId] = count === 1 ? baseSlug : `${baseSlug}-${count}`;
+                    }
+                }
+            }
+
+            // Collect referenced headingIds from links
+            if (item.paragraph?.elements) {
+                for (const element of item.paragraph.elements) {
+                    const linkHeadingId = element.textRun?.textStyle?.link?.headingId;
+                    if (linkHeadingId) {
+                        referencedHeadingIds.add(linkHeadingId);
+                    }
                 }
             }
         }
@@ -890,7 +912,11 @@ function wordPressCompatibleClean(html) {
         .replace(/\s+style="[^"]*"/g, '')
         // Keep special classes but remove others
         .replace(classRegex, '')
-        .replace(/\s+id="[^"]*"/g, '')
+        // Keep heading ids for anchor links
+        .replace(/<[^>]+>/g, (tag) => {
+            if (/^<h[1-6]\b/i.test(tag)) return tag;
+            return tag.replace(/\s+id="[^"]*"/g, '');
+        })
         .replace(/\s+data-[^=]*="[^"]*"/g, '')
         
         // Simplify tables - only border="1"
